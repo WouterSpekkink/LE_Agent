@@ -1,24 +1,10 @@
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
 from langchain.chat_models import ChatOpenAI
-from langchain.chains import RetrievalQA
-from dotenv import load_dotenv
-from langchain.memory import ConversationBufferMemory
+from langchain.memory import ConversationBufferMemory, ReadOnlySharedMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain.callbacks import OpenAICallbackHandler
-from langchain.agents import AgentOutputParser
-from typing import List, Union
-from langchain.schema import AgentAction, AgentFinish, HumanMessage
-from langchain import LLMChain
-from datetime import datetime
-import chainlit as cl
-import os
-import sys
-import constants
-import openai
-import json
-
+from langchain import ConversationChain
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
 from langchain.tools import BaseTool
@@ -35,7 +21,13 @@ from langchain.schema import (
     HumanMessage,
     SystemMessage
 )
-
+from datetime import datetime
+from dotenv import load_dotenv
+import chainlit as cl
+import os
+import sys
+import constants
+import openai
 
 # Cleanup function for source strings
 def string_cleanup(string):
@@ -55,21 +47,21 @@ empirical = FAISS.load_local("./empirical_vectorstore/", embeddings)
 # Set up callback handler
 handler = OpenAICallbackHandler()
 
-# # Set up source file
-# now = datetime.now()
-# timestamp = now.strftime("%Y%m%d_%H%M%S")
-# filename = f"answers/answers_{timestamp}.txt"
-# with open(filename, 'w') as file:
-#   file.write(f"Answers and sources for session started on {timestamp}\n\n")
+# Set up source file
+now = datetime.now()
+timestamp = now.strftime("%Y%m%d_%H%M%S")
+filename = f"answers/answers_{timestamp}.txt"
+with open(filename, 'w') as file:
+  file.write(f"Answers and sources for session started on {timestamp}\n\n")
 
 @cl.on_chat_start
 async def main():
   # Set llm
   llm = ChatOpenAI(model="gpt-3.5-turbo", streaming=True)
   
-
-  tool_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-
+  memory = ConversationBufferMemory(memory_key="chat_history", input_key='question', output_key='answer', return_messages=True, k = 10)
+  readonlymemory = ReadOnlySharedMemory(memory=memory)
+  
   system_prompt_template = (
   '''
   You are a knowledgeable professor working in academia.
@@ -103,8 +95,25 @@ async def main():
     retriever=conceptual.as_retriever(search_type="mmr", search_kwargs={"k" : 10}),
     chain_type="stuff",
     combine_docs_chain_kwargs={'prompt': chat_prompt},
-    memory=tool_memory,
+    memory=memory,
+    return_source_documents=True,
   )
+  
+  def run_conceptual_chain(question):
+    results = conceptual_chain({"question": question}, return_only_outputs=True)
+    sources = results['source_documents']
+    for source in sources:
+      with open(filename, 'a') as file:
+        file.write("Query:\n")
+        file.write(question)
+        file.write("\n\n")
+        file.write("Document: ")
+        file.write(source.metadata['source'])
+        file.write("\n\n")
+        file.write("Content:\n")
+        file.write(source.page_content.replace("\n", " "))
+        file.write("\n\n")
+    return str(results['answer'])
 
   system_prompt_template = (
     '''You help me to extract relevant information from a case description from news items.
@@ -129,6 +138,7 @@ async def main():
     Yoy also help me to write parts of my case description of I ask you to do so. 
     
     If the context doesn't provide a satisfactory answer, just tell me that and don't try to make something up.
+    
     Please try to give detailed answers and write your answers as an academic text, unless explicitly told otherwise.
     
     """
@@ -152,50 +162,72 @@ async def main():
     retriever=empirical.as_retriever(search_type="mmr", search_kwargs={"k" : 10}),
     chain_type="stuff",
     combine_docs_chain_kwargs={'prompt': chat_prompt},
-    memory=tool_memory,
+    memory=memory,
+    return_source_documents = True,
   )
+
+  def run_empirical_chain(question):
+    results = empirical_chain({"question": question}, return_only_outputs=True)
+    sources = results['source_documents']
+    for source in sources:
+      with open(filename, 'a') as file:
+        file.write("Query:\n")
+        file.write(question)
+        file.write("\n\n")
+        file.write("Document: ")
+        file.write(source.metadata['source'])
+        file.write("\n\n")
+        file.write("Content:\n")
+        file.write(source.page_content.replace("\n", " "))
+        file.write("\n\n")
+    return str(results['answer'])
 
   system_prompt_template = (
     '''You help me write academic texts of a length specified by the user. 
-    For this, you consider the provided context and you write a coherent, essay-like text about this.
+    For this, you consider the input, history and the chat_history and you write a coherent, essay-like text based on this information.
 
     """
-    Context: {input}
+    Chat history: {chat_history}
+    """
+    """
+    Input: {input}
     """
 
     ''')
 
   system_prompt = PromptTemplate(template=system_prompt_template,
-                                 input_variables=["input"])
+                                 input_variables=["chat_history", "input"],
+                                 )
 
-  writing_chain = LLMChain(
+  writing_chain = ConversationChain(
     llm=llm,
     prompt=system_prompt,
-    memory=tool_memory,
+    memory=readonlymemory,
   )
+
+  def run_writing_chain(question):
+    results = writing_chain({"input": question}, return_only_outputs=True)
+    return str(results['response'])
 
   # Add chains to toolbox.
   tools = [
     Tool(
       name="Conceptual tool",
-      func=conceptual_chain.run,
+      func=run_conceptual_chain,
       description="""Useful for when you need to understand a concept or theory.
       The input should be a fully formed question that also includes the full context of the conversation before.
-      The input should also include the full context from the conversation before.
       """,
       ),
     Tool(
       name="Empirical tool",
-      func=empirical_chain.run,
+      func=run_empirical_chain,
       description="""Useful for when you need empirical information on a topic.
-      The input should be a fully formed question including context for the question.
-      If you ask this tool to illustrate a concept, the input must include the full context of the conversation before.
-      This context can be an exact copy of the output of the conceptual tool.
-      """,
+      The input should be a fully formed question that also includes the full context of the conversation before.
+;      """,
       ),
     Tool(
       name="Writing tool",
-      func=writing_chain.run,
+      func=run_writing_chain,
       description="""Useful for when you need to output texts based on input from the empirical and conceptual tool.
       The input should be a fully formed question that also includes the full context of the conversation before.
       This tool requires that other tools have been used to generate input for the writing task.
@@ -204,14 +236,12 @@ async def main():
       ),
     ]
 
-  agent_memory = ConversationBufferMemory(memory_key="chat_history", input_key="input", output_key="output", return_messages=True)
-
   # Set up agent
   agent = initialize_agent(tools,
                            llm=llm,
                            agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
                            verbose=True,
-                           memory=tool_memory,
+                           memory=readonlymemory,
                            )
 
   cl.user_session.set("agent", agent)
