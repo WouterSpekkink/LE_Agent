@@ -10,12 +10,14 @@ from langchain.callbacks import OpenAICallbackHandler
 from langchain.agents import AgentOutputParser
 from typing import List, Union
 from langchain.schema import AgentAction, AgentFinish, HumanMessage
+from langchain import LLMChain
 from datetime import datetime
 import chainlit as cl
 import os
 import sys
 import constants
 import openai
+import json
 
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
@@ -64,17 +66,9 @@ handler = OpenAICallbackHandler()
 async def main():
   # Set llm
   llm = ChatOpenAI(model="gpt-3.5-turbo", streaming=True)
-  #llm = OpenAI(temperature=0)
   
-  # # Set up the conceptual chain
-  # conceptual_chain = RetrievalQA.from_chain_type(
-  #   llm=llm,
-  #   chain_type="stuff",
-  #   retriever=conceptual.as_retriever(search_type="mmr", search_kwargs={"k" : 10}))
-  
-  # cl.user_session.set("conceptual_chain", conceptual_chain)
 
-  memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+  tool_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
   system_prompt_template = (
   '''
@@ -110,7 +104,7 @@ async def main():
     retriever=conceptual.as_retriever(search_type="mmr", search_kwargs={"k" : 10}),
     chain_type="stuff",
     combine_docs_chain_kwargs={'prompt': chat_prompt},
-    memory=memory,
+    memory=tool_memory,
   )
 
   system_prompt_template = (
@@ -137,19 +131,36 @@ async def main():
   human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
   chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
   
-  # Set up the empirical chain
-  # empirical_chain = RetrievalQA.from_chain_type(
-  #   llm=llm,
-  #   chain_type="stuff",
-  #   retriever=empirical.as_retriever(search_type="mmr", search_kwargs={"k" : 10}))
-  
-  # cl.user_session.set("empirical_chain", empirical_chain)
   empirical_chain = ConversationalRetrievalChain.from_llm(
     llm=llm,
     retriever=empirical.as_retriever(search_type="mmr", search_kwargs={"k" : 10}),
     chain_type="stuff",
     combine_docs_chain_kwargs={'prompt': chat_prompt},
-    memory=memory,
+    memory=tool_memory,
+  )
+
+  system_prompt_template = (
+    '''You help me write academic texts of a length specified by the user. 
+    For this, you consider the provided context and you write a coherent, essay-like text about this.
+
+    """
+    Context: {input}
+    """
+
+    ''')
+
+  system_prompt = PromptTemplate(template=system_prompt_template,
+                                 input_variables=["input"])
+
+  # system_message_prompt = SystemMessagePromptTemplate(prompt = system_prompt)
+  # human_template = "{question}"
+  # human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
+  # chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
+ 
+  writing_chain = LLMChain(
+    llm=llm,
+    prompt=system_prompt,
+    memory=tool_memory,
   )
 
   # Add chains to toolbox.
@@ -157,20 +168,40 @@ async def main():
     Tool(
       name="Conceptual tool",
       func=conceptual_chain.run,
-      description="useful for when you need to understand a concept or theory.",
+      description="""Useful for when you need to understand a concept or theory.
+      The input should be a fully formed question that also includes the full context of the conversation before.
+      The input should also include the full context from the conversation before.
+      """,
       ),
     Tool(
       name="Empirical tool",
       func=empirical_chain.run,
-      description="useful for when you need empirical information."
+      description="""Useful for when you need empirical information on a topic.
+      The input should be a fully formed question including context for the question.
+      If you ask this tool to illustrate a concept, you should give it the full context based on output of the conversation before.
+      This context can be an exact copy of the output of the conceptua tool.
+      The input should also include the full context from the conversation before.
+      """,
+      ),
+    Tool(
+      name="Writing tool",
+      func=writing_chain.run,
+      description="""Useful for when you need to output texts based on input from the empirical and conceptual tool.
+      The input should be a fully formed question that also includes the full context of the conversation before.
+      This tool requires that other tools have been used to generate input for the writing task.
+      If you used this tool, your final answer should be an exact copy of the output of this tool.
+      """,
       ),
     ]
+
+  agent_memory = ConversationBufferMemory(memory_key="chat_history", input_key="input", output_key="output", return_messages=True)
 
   # Set up agent
   agent = initialize_agent(tools,
                            llm=llm,
                            agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
-                           memory=memory,
+                           verbose=True,
+                           memory=agent_memory,
                            )
 
   cl.user_session.set("agent", agent)
