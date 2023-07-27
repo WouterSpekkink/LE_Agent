@@ -84,11 +84,10 @@ async def main():
   Use references to literature in your answer and include a bibliography for citations that you use.
   If you cannot provide appropriate references, tell me by the end of your answer.
  
-  Format your answer as follows:
-  [One or multiple sentences that constitutes part of your answer (APA-style reference)]
-  [The rest of your answer]
-  [Bibliography:]
-  [Bulleted bibliographical entries in APA-style]
+  One or multiple sentences that constitutes part of your answer (APA-style reference)
+  The rest of your answer
+  Bibliography:
+  Bulleted bibliographical entries in APA-style
   ''')
   
   system_prompt = PromptTemplate(template=system_prompt_template,
@@ -118,6 +117,22 @@ async def main():
 
     """
     Context: {context}
+    Question: {question}
+    """
+    If possible, consider sources from both Dutch and English language sources.
+    ''')
+  # Customize prompt
+  system_prompt_template = (
+    '''You help me to extract relevant information from a case description from news items.
+    The context includes extracts from relevant new items in Dutch and English.
+    You help me by answering questions about the topic I wish to write a case description on.
+    Yoy also help me to write parts of my case description of I ask you to do so. 
+    
+    If the context doesn't provide a satisfactory answer, just tell me that and don't try to make something up.
+    Please try to give detailed answers and write your answers as an academic text, unless explicitly told otherwise.
+    
+    """
+    Context: {context}
     """
 
     If possible, consider sources from both Dutch and English language sources.
@@ -131,6 +146,7 @@ async def main():
   human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
   chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
   
+  # Set up conversational chain
   empirical_chain = ConversationalRetrievalChain.from_llm(
     llm=llm,
     retriever=empirical.as_retriever(search_type="mmr", search_kwargs={"k" : 10}),
@@ -152,11 +168,6 @@ async def main():
   system_prompt = PromptTemplate(template=system_prompt_template,
                                  input_variables=["input"])
 
-  # system_message_prompt = SystemMessagePromptTemplate(prompt = system_prompt)
-  # human_template = "{question}"
-  # human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
-  # chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
- 
   writing_chain = LLMChain(
     llm=llm,
     prompt=system_prompt,
@@ -178,9 +189,8 @@ async def main():
       func=empirical_chain.run,
       description="""Useful for when you need empirical information on a topic.
       The input should be a fully formed question including context for the question.
-      If you ask this tool to illustrate a concept, you should give it the full context based on output of the conversation before.
-      This context can be an exact copy of the output of the conceptua tool.
-      The input should also include the full context from the conversation before.
+      If you ask this tool to illustrate a concept, the input must include the full context of the conversation before.
+      This context can be an exact copy of the output of the conceptual tool.
       """,
       ),
     Tool(
@@ -189,8 +199,8 @@ async def main():
       description="""Useful for when you need to output texts based on input from the empirical and conceptual tool.
       The input should be a fully formed question that also includes the full context of the conversation before.
       This tool requires that other tools have been used to generate input for the writing task.
-      If you used this tool, your final answer should be an exact copy of the output of this tool.
       """,
+      return_direct=True,
       ),
     ]
 
@@ -201,7 +211,7 @@ async def main():
                            llm=llm,
                            agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
                            verbose=True,
-                           memory=agent_memory,
+                           memory=tool_memory,
                            )
 
   cl.user_session.set("agent", agent)
