@@ -63,7 +63,7 @@ async def main():
   llm = ChatOpenAI(model="gpt-3.5-turbo-16k", streaming=True)
   
   # Set up shared memory
-  memory = ConversationBufferMemory(memory_key="chat_history", input_key='question', output_key='answer', return_messages=True, k = 10)
+  memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
   readonlymemory = ReadOnlySharedMemory(memory=memory)
   
   # Set up conceptual chain prompt
@@ -109,7 +109,7 @@ async def main():
     retriever=conceptual_compression_retriever_reordered,
     chain_type="stuff",
     combine_docs_chain_kwargs={'prompt': conceptual_chat_prompt},
-    memory=memory,
+    memory=readonlymemory,
     return_source_documents=True,
   )
 
@@ -185,7 +185,7 @@ async def main():
     retriever=empirical_compression_retriever_reordered,
     chain_type="stuff",
     combine_docs_chain_kwargs={'prompt': empirical_chat_prompt},
-    memory=memory,
+    memory=readonlymemory,
     return_source_documents = True,
   )
 
@@ -235,11 +235,6 @@ async def main():
     memory=readonlymemory,
   )
 
-  # Wrap writing chain
-  def run_writing_chain(question):
-    results = writing_chain({"input": question}, return_only_outputs=True)
-    return str(results['response'])
-
   # Add chains to toolbox.
   tools = [
     Tool(
@@ -249,6 +244,7 @@ async def main():
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       """,
+      return_direct=True,
       ),
     Tool(
       name="Empirical tool",
@@ -258,10 +254,11 @@ async def main():
       The question should end with a question mark.
       The input should be a fully formed question. 
 ;      """,
+      return_direct=True,
       ),
     Tool(
       name="Writing tool",
-      func=run_writing_chain,
+      func=writing_chain.run,
       description="""Useful for when you need to output texts based on input from the empirical and conceptual tool.
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
@@ -275,7 +272,7 @@ async def main():
                            llm=llm,
                            agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
                            verbose=True,
-                           memory=readonlymemory,
+                           memory=memory,
                            handle_parsing_errors=True,
                            )
 
