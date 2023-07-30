@@ -212,8 +212,7 @@ async def main():
   # Set up writing chain prompt
   writing_system_prompt_template = (
     '''You help me write academic texts of a length specified by the user. 
-    For this, you consider the input, chat history and you write a coherent, essay-like text based on this information.
-    Not everything in the chat history may be relevant.
+    For this, you consider the input and chat history and you write a coherent, essay-like text based on this information.
 
     """
     Chat history: {chat_history}
@@ -232,6 +231,32 @@ async def main():
   writing_chain = ConversationChain(
     llm=llm,
     prompt=writing_system_prompt,
+    memory=readonlymemory,
+  )
+
+  # Set up writing chain prompt
+  critical_system_prompt_template = (
+    '''You are a critical academic commentator.
+    You consider the input and chat history and you consider the arguments made in it and offer a critique of them.
+    When offering a critique, you also offer suggestions for improvement of the argument.
+
+    """
+    Chat history: {chat_history}
+    """
+    """
+    Input: {input}
+    """
+
+    ''')
+
+  critical_system_prompt = PromptTemplate(template=critical_system_prompt_template,
+                                 input_variables=["chat_history", "input"],
+                                 )
+
+  # Initialize writing chain
+  critical_chain = ConversationChain(
+    llm=llm,
+    prompt=critical_system_prompt,
     memory=readonlymemory,
   )
 
@@ -263,6 +288,15 @@ async def main():
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       """,
+      return_direct=True,
+      ),
+    Tool(
+      name="Critique tool",
+      func=writing_chain.run,
+      description="""Useful for when you need to offer a critique on something that was said before."
+      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
+      The question should end with a question mark.
+      """ ,
       return_direct=True,
       ),
     ]
