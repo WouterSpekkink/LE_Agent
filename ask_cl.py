@@ -53,9 +53,9 @@ handler = OpenAICallbackHandler()
 # Set up source file
 now = datetime.now()
 timestamp = now.strftime("%Y%m%d_%H%M%S")
-filename = f"answers/answers_{timestamp}.txt"
+filename = f"answers/answers_{timestamp}.org"
 with open(filename, 'w') as file:
-  file.write(f"Answers and sources for session started on {timestamp}\n\n")
+  file.write(f"#+TITLE: Answers and sources for session started on {timestamp}\n\n")
 
 @cl.on_chat_start
 async def main():
@@ -117,19 +117,19 @@ async def main():
   def run_conceptual_chain(question):
     results = conceptual_chain({"question": question}, return_only_outputs=True)
     sources = results['source_documents']
-    counter = 1
-    for source in sources:
-      with open(filename, 'a') as file:
-        file.write(f"Tool: Conceptual tool_{counter}\n\n")
-        file.write("Query:\n")
-        file.write(question)
-        file.write("\n\n")
-        file.write("Document: ")
+    with open(filename, 'a') as file:
+      file.write("* Tool: Conceptual tool\n")
+      file.write("* Query:\n")
+      file.write(question)
+      file.write("\n")
+      counter = 1
+      for source in sources:
+        file.write(f"** Document_{counter}: ")
         file.write(os.path.basename(source.metadata['source']))
-        file.write("\n\n")
-        file.write("Content:\n")
+        file.write("\n")
+        file.write("*** Content:\n")
         file.write(source.page_content.replace("\n", " "))
-        file.write("\n\n")
+        file.write("\n")
       counter += 1
     return str(results['answer'])
 
@@ -193,19 +193,19 @@ async def main():
   def run_empirical_chain(question):
     results = empirical_chain({"question": question}, return_only_outputs=True)
     sources = results['source_documents']
-    counter = 1
-    for source in sources:
-      with open(filename, 'a') as file:
-        file.write(f"Tool: Empirical tool_{counter}\n\n")
-        file.write("Query:\n")
-        file.write(question)
-        file.write("\n\n")
-        file.write("Document: ")
+    with open(filename, 'a') as file:
+      file.write("* Tool: Empirical tool\n\n")
+      file.write("* Query:\n")
+      file.write(question)
+      file.write("\n")
+      counter = 1
+      for source in sources:
+        file.write(f"** Document_{counter}: ")
         file.write(source.metadata['source'])
-        file.write("\n\n")
-        file.write("Content:\n")
+        file.write("\n")
+        file.write("*** Content:\n")
         file.write(source.page_content.replace("\n", " "))
-        file.write("\n\n")
+        file.write("\n")
       counter += 1
     return str(results['answer'])
 
@@ -296,7 +296,7 @@ async def main():
       description="""Useful for when you need to offer a critique on something that was said before."
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
-      """ ,
+      """,
       return_direct=True,
       ),
     ]
