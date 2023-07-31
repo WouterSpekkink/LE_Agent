@@ -55,6 +55,7 @@ now = datetime.now()
 timestamp = now.strftime("%Y%m%d_%H%M%S")
 filename = f"answers/answers_{timestamp}.org"
 with open(filename, 'w') as file:
+  file.write("#+OPTIONS: toc:nil author:nil\n")
   file.write(f"#+TITLE: Answers and sources for session started on {timestamp}\n\n")
 
 @cl.on_chat_start
