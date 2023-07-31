@@ -129,7 +129,7 @@ async def main():
         file.write(os.path.basename(source.metadata['source']))
         file.write("\n")
         file.write("*** Content:\n")
-        file.write(source.page_content.replace("\n", " "))
+        file.write(source.page_content)
         file.write("\n")
       counter += 1
     return str(results['answer'])
@@ -205,7 +205,7 @@ async def main():
         file.write(source.metadata['source'])
         file.write("\n")
         file.write("*** Content:\n")
-        file.write(source.page_content.replace("\n", " "))
+        file.write(source.page_content)
         file.write("\n")
       counter += 1
     return str(results['answer'])
