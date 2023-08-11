@@ -174,7 +174,60 @@ critical_system_prompt_template = (
 critical_system_prompt = PromptTemplate(template=critical_system_prompt_template,
                                         input_variables=["chat_history", "input"],
                                         )
+# Customize prompt
+mc_system_prompt_template = (
+  '''You are a university professor in the field of governance in the public sector.
+  You are also a test expert specialized in making multiple choice exams.
+  You make multiple choice exam questions based on the chat history and the input provided below.
+  
+  The user will ask to formulate a question about a certain topic, so make sure the answer is about that topic.
+  
+  """
+  Chat history: {chat_history}
+  """
+  """
+  Input: {input}
+  """
+  
+  The multiple choice questions should adhere to a couple of rules:
+  - Questions should always end with a question mark
+  - Questions should not refer to the answer options, because they should be answerable without reading the answer options
+  For example, a question that starts with "Which of the following" is not allowed.
+  - There should always be four answer options, of which one is correct and the others are plausible but incorrect
+  - All answer options should be relevant to the topic of the question.
+  - The wrong answers should really be wrong and not partially correct
+  - The answers should be more or less of the same length
+  - Answers are never allowed to be something like 'all of the above.'
+  - Every question should ask only one question; do not put multiple questions together
+  
+  The user typically needs multiple questions on the same topic, so make sure there is some diversity in the questions you come up with.
+  The questions should be appropriate for students and the bachelor level.
+  
+  The question must not directly refer to 'the context', as the person who will need to answer the question cannot see the context provided to you.
+  The question must be stand-alone.
+  If you wish to introduce the question with an example, you should come up with that example.
 
+  Format your answers as follows:
+  """
+  Question
+  a. Correct answer option
+  b. Plausible but wrong answer option
+  c. Plausible but wrong answer option
+  d. Plausible but wrong answer option
+  
+  Eplanation of correct and incorrect answers.
+  """
+  
+  The user may ask you to "simplify" a question.
+  In that case, simplify your last generated response rather than making a new question.
+  
+  The user may ask you to "correct" a question and tell you what to correct.
+  In that case, correct your last generated response as instructed by the user, rather than making a new question.
+  ''')
+
+mc_system_prompt = PromptTemplate(template=critical_system_prompt_template,
+                                        input_variables=["chat_history", "input"],
+                                        )
 # Set up source file
 now = datetime.now()
 timestamp = now.strftime("%Y%m%d_%H%M%S")
@@ -257,6 +310,20 @@ async def start():
         max=2,
         step=0.1,
       ),
+      Select(
+        id="MC_Model",
+        label="OpenAI - MC Model",
+        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Slider(
+        id="MC_Temperature",
+        label="OpenAI - MC Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
     ]
   ).send()
   await setup_chain(settings)
@@ -285,6 +352,11 @@ async def setup_chain(settings):
     temperature=settings["Critique_Temperature"],
     model=settings["Critique_Model"],
   )
+  mc_llm=ChatOpenAI(
+    temperature=settings["MC_Temperature"],
+    model=settings["MC_Model"],
+  )
+
    # Initialize chain
   conceptual_chain = ConversationalRetrievalChain.from_llm(
     llm=conceptual_llm,
@@ -361,6 +433,13 @@ async def setup_chain(settings):
     memory=readonlymemory,
   )
 
+  # Initialize MC chain
+  mc_chain = ConversationChain(
+    llm=mc_llm,
+    prompt=mc_system_prompt,
+    memory=readonlymemory,
+  )
+
   # Add chains to toolbox.
   tools = [
     Tool(
@@ -395,6 +474,15 @@ async def setup_chain(settings):
       name="Critique tool",
       func=writing_chain.run,
       description="""Useful for when you need to offer a critique on something that was said before."
+      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
+      The question should end with a question mark.
+      """,
+      return_direct=True,
+      ),
+    Tool(
+      name="MC tool",
+      func=mc_chain.run,
+      description="""Useful for when you need to develop multiple choice questions."
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       """,
