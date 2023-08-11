@@ -27,6 +27,7 @@ from langchain.schema import (
 from datetime import datetime
 from dotenv import load_dotenv
 import chainlit as cl
+from chainlit.input_widget import Select, Switch, Slider
 import os
 import sys
 import constants
@@ -59,10 +60,38 @@ with open(filename, 'w') as file:
   file.write(f"#+TITLE: Answers and sources for session started on {timestamp}\n\n")
 
 @cl.on_chat_start
-async def main():
+async def start():
+  settings = await cl.ChatSettings(
+    [
+      Select(
+        id="Model",
+        label="OpenAI - Model",
+        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Switch(id="Streaming", label="OpenAI - Stream Tokens", initial=True),
+      Slider(
+        id="Temperature",
+        label="OpenAI - Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
+    ]
+  ).send()
+  await setup_chain(settings)
+
+# When settings are updated
+@cl.on_settings_update
+async def setup_chain(settings):
   # Set llm
-  llm = ChatOpenAI(model="gpt-3.5-turbo-16k", streaming=True)
-  
+  llm=ChatOpenAI(
+    temperature=settings["Temperature"],
+    streaming=settings["Streaming"],
+    model=settings["Model"],
+  )
+
   # Set up shared memory
   memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
   readonlymemory = ReadOnlySharedMemory(memory=memory)
@@ -112,6 +141,7 @@ async def main():
     combine_docs_chain_kwargs={'prompt': conceptual_chat_prompt},
     memory=readonlymemory,
     return_source_documents=True,
+    condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo'),
   )
 
   # Wrap chain
@@ -188,6 +218,7 @@ async def main():
     combine_docs_chain_kwargs={'prompt': empirical_chat_prompt},
     memory=readonlymemory,
     return_source_documents = True,
+    condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo'),
   )
 
   # Wrap empirical chain
@@ -309,6 +340,7 @@ async def main():
                            verbose=True,
                            memory=memory,
                            handle_parsing_errors=True,
+                           condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo'),
                            )
 
   cl.user_session.set("agent", agent)
@@ -316,6 +348,6 @@ async def main():
 @cl.on_message
 async def main(message: str):
   agent = cl.user_session.get("agent")
-  cb = cl.LangchainCallbackHandler()
+  cb = cl.LangchainCallbackHandler(stream_final_answer=True)
   res = await cl.make_async(agent.run)(message, callbacks=[cb])
   await cl.Message(content=res).send()
