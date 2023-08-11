@@ -27,7 +27,7 @@ from langchain.schema import (
 from datetime import datetime
 from dotenv import load_dotenv
 import chainlit as cl
-from chainlit.input_widget import Select, Switch, Slider
+from chainlit.input_widget import Select, Slider
 import os
 import sys
 import constants
@@ -51,57 +51,16 @@ empirical = FAISS.load_local("./empirical_vectorstore/", embeddings)
 # Set up callback handler
 handler = OpenAICallbackHandler()
 
-# Set up source file
-now = datetime.now()
-timestamp = now.strftime("%Y%m%d_%H%M%S")
-filename = f"answers/answers_{timestamp}.org"
-with open(filename, 'w') as file:
-  file.write("#+OPTIONS: toc:nil author:nil\n")
-  file.write(f"#+TITLE: Answers and sources for session started on {timestamp}\n\n")
+# Set up shared memory
+memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+readonlymemory = ReadOnlySharedMemory(memory=memory)
 
-@cl.on_chat_start
-async def start():
-  settings = await cl.ChatSettings(
-    [
-      Select(
-        id="Model",
-        label="OpenAI - Model",
-        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
-      ),
-      Switch(id="Streaming", label="OpenAI - Stream Tokens", initial=True),
-      Slider(
-        id="Temperature",
-        label="OpenAI - Temperature",
-        initial=0,
-        min=0,
-        max=2,
-        step=0.1,
-      ),
-    ]
-  ).send()
-  await setup_chain(settings)
-
-# When settings are updated
-@cl.on_settings_update
-async def setup_chain(settings):
-  # Set llm
-  llm=ChatOpenAI(
-    temperature=settings["Temperature"],
-    streaming=settings["Streaming"],
-    model=settings["Model"],
-  )
-
-  # Set up shared memory
-  memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-  readonlymemory = ReadOnlySharedMemory(memory=memory)
-  
-  # Set up conceptual chain prompt
-  conceptual_system_prompt_template = (
+# Set up conceptual chain prompt
+conceptual_system_prompt_template = (
   '''
   You are a knowledgeable professor working in academia, focused on clearly explaining concepts.
   Using the provided pieces of context, you answer the questions asked by the user.
-
+  
   """
   Context: {context}
   """
@@ -118,24 +77,217 @@ async def setup_chain(settings):
   Bulleted bibliographical entries in APA-style
   ''')
   
-  conceptual_system_prompt = PromptTemplate(template=conceptual_system_prompt_template,
-                                 input_variables=["context"])
+conceptual_system_prompt = PromptTemplate(template=conceptual_system_prompt_template,
+                                          input_variables=["context"])
 
-  conceptual_system_message_prompt = SystemMessagePromptTemplate(prompt = conceptual_system_prompt)
-  conceptual_human_template = "{question}"
-  conceptual_human_message_prompt = HumanMessagePromptTemplate.from_template(conceptual_human_template)
-  conceptual_chat_prompt = ChatPromptTemplate.from_messages([conceptual_system_message_prompt, conceptual_human_message_prompt])
+conceptual_system_message_prompt = SystemMessagePromptTemplate(prompt = conceptual_system_prompt)
+conceptual_human_template = "{question}"
+conceptual_human_message_prompt = HumanMessagePromptTemplate.from_template(conceptual_human_template)
+conceptual_chat_prompt = ChatPromptTemplate.from_messages([conceptual_system_message_prompt, conceptual_human_message_prompt])
 
-  # Set up conceptual chain reordering
-  redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
-  reordering = LongContextReorder()
-  pipeline = DocumentCompressorPipeline(transformers=[redundant_filter, reordering])
-  conceptual_compression_retriever_reordered = ContextualCompressionRetriever(
-    base_compressor=pipeline, base_retriever=conceptual.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
+# Set up conceptual chain reordering
+redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
+reordering = LongContextReorder()
+pipeline = DocumentCompressorPipeline(transformers=[redundant_filter, reordering])
+conceptual_compression_retriever_reordered = ContextualCompressionRetriever(
+  base_compressor=pipeline, base_retriever=conceptual.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
 
-  # Initialize chain
+# Set up empirical chain prompt
+empirical_system_prompt_template = (
+  '''You help me to extract relevant information from a case description from news items.
+  The context includes extracts from relevant new items in Dutch and English.
+  You help me by answering questions about the topic I wish to write a case description on.
+  Yoy also help me to write parts of my case description of I ask you to do so. 
+  
+  If the context doesn't provide a satisfactory answer, just tell me that and don't try to make something up.
+  Please try to give detailed answers and write your answers as an academic text, unless explicitly told otherwise.
+  
+  """
+  Context: {context}
+  Question: {question}
+  """
+  If possible, consider sources from both Dutch and English language sources.
+  ''')
+
+empirical_system_prompt_template = (
+  '''You help me to extract relevant information from a case description from news items.
+  The context includes extracts from relevant new items in Dutch and English.
+  You help me by answering questions about the topic I wish to write a case description on.
+  Yoy also help me to write parts of my case description of I ask you to do so. 
+  
+  If the context doesn't provide a satisfactory answer, just tell me that and don't try to make something up.
+  
+  Please try to give detailed answers and write your answers as an academic text, unless explicitly told otherwise.
+  
+  """
+  Context: {context}
+  """
+  
+  If possible, consider sources from both Dutch and English language sources.
+  ''')
+
+empirical_system_prompt = PromptTemplate(template=empirical_system_prompt_template,
+                                         input_variables=["context"])
+
+empirical_system_message_prompt = SystemMessagePromptTemplate(prompt = empirical_system_prompt)
+empirical_human_template = "{question}"
+empirical_human_message_prompt = HumanMessagePromptTemplate.from_template(empirical_human_template)
+empirical_chat_prompt = ChatPromptTemplate.from_messages([empirical_system_message_prompt, empirical_human_message_prompt])
+
+# Setup empirical reorder
+empirical_compression_retriever_reordered = ContextualCompressionRetriever(
+  base_compressor=pipeline, base_retriever=empirical.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
+
+# Set up writing chain prompt
+writing_system_prompt_template = (
+  '''You help me write academic texts of a length specified by the user. 
+  For this, you consider the input and chat history and you write a coherent, essay-like text based on this information.
+  
+  """
+  Chat history: {chat_history}
+  """
+  """
+  Input: {input}
+  """
+  
+  ''')
+
+writing_system_prompt = PromptTemplate(template=writing_system_prompt_template,
+                                       input_variables=["chat_history", "input"],
+                                       )
+
+# Set up writing chain prompt
+critical_system_prompt_template = (
+  '''You are a critical academic commentator.
+  You consider the input and chat history and you consider the arguments made in it and offer a critique of them.
+  When offering a critique, you also offer suggestions for improvement of the argument.
+  
+  """
+  Chat history: {chat_history}
+  """
+  """
+  Input: {input}
+  """
+
+  ''')
+
+critical_system_prompt = PromptTemplate(template=critical_system_prompt_template,
+                                        input_variables=["chat_history", "input"],
+                                        )
+
+# Set up source file
+now = datetime.now()
+timestamp = now.strftime("%Y%m%d_%H%M%S")
+filename = f"answers/answers_{timestamp}.org"
+with open(filename, 'w') as file:
+  file.write("#+OPTIONS: toc:nil author:nil\n")
+  file.write(f"#+TITLE: Answers and sources for session started on {timestamp}\n\n")
+
+@cl.on_chat_start
+async def start():
+  settings = await cl.ChatSettings(
+    [
+      Select(
+        id="Agent_Model",
+        label="OpenAI - Agent Model",
+        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Slider(
+        id="Agent_Temperature",
+        label="OpenAI - Agent Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
+      Select(
+        id="Conceptual_Model",
+        label="OpenAI - Conceptual Model",
+        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Slider(
+        id="Conceptual_Temperature",
+        label="OpenAI - Conceptual Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
+      Select(
+        id="Empirical_Model",
+        label="OpenAI - Empirical Model",
+        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Slider(
+        id="Empirical_Temperature",
+        label="OpenAI - Empirical Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
+      Select(
+        id="Writing_Model",
+        label="OpenAI - Writing Model",
+        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Slider(
+        id="Writing_Temperature",
+        label="OpenAI - Writing Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
+      Select(
+        id="Critique_Model",
+        label="OpenAI - Critique Model",
+        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Slider(
+        id="Critique_Temperature",
+        label="OpenAI - Critique Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
+    ]
+  ).send()
+  await setup_chain(settings)
+
+# When settings are updated
+@cl.on_settings_update
+async def setup_chain(settings):
+  # Set llms
+  agent_llm=ChatOpenAI(
+    temperature=settings["Agent_Temperature"],
+    model=settings["Agent_Model"],
+  )
+  conceptual_llm=ChatOpenAI(
+    temperature=settings["Conceptual_Temperature"],
+    model=settings["Conceptual_Model"],
+  )
+  empirical_llm=ChatOpenAI(
+    temperature=settings["Empirical_Temperature"],
+    model=settings["Empirical_Model"],
+  )
+  writing_llm=ChatOpenAI(
+    temperature=settings["Writing_Temperature"],
+    model=settings["Writing_Model"],
+  )
+  critique_llm=ChatOpenAI(
+    temperature=settings["Critique_Temperature"],
+    model=settings["Critique_Model"],
+  )
+   # Initialize chain
   conceptual_chain = ConversationalRetrievalChain.from_llm(
-    llm=llm,
+    llm=conceptual_llm,
     retriever=conceptual_compression_retriever_reordered,
     chain_type="stuff",
     combine_docs_chain_kwargs={'prompt': conceptual_chat_prompt},
@@ -164,55 +316,9 @@ async def setup_chain(settings):
       counter += 1
     return str(results['answer'])
 
-  # Set up empirical chain prompt
-  empirical_system_prompt_template = (
-    '''You help me to extract relevant information from a case description from news items.
-    The context includes extracts from relevant new items in Dutch and English.
-    You help me by answering questions about the topic I wish to write a case description on.
-    Yoy also help me to write parts of my case description of I ask you to do so. 
-    
-    If the context doesn't provide a satisfactory answer, just tell me that and don't try to make something up.
-    Please try to give detailed answers and write your answers as an academic text, unless explicitly told otherwise.
-
-    """
-    Context: {context}
-    Question: {question}
-    """
-    If possible, consider sources from both Dutch and English language sources.
-    ''')
-
-  empirical_system_prompt_template = (
-    '''You help me to extract relevant information from a case description from news items.
-    The context includes extracts from relevant new items in Dutch and English.
-    You help me by answering questions about the topic I wish to write a case description on.
-    Yoy also help me to write parts of my case description of I ask you to do so. 
-    
-    If the context doesn't provide a satisfactory answer, just tell me that and don't try to make something up.
-    
-    Please try to give detailed answers and write your answers as an academic text, unless explicitly told otherwise.
-    
-    """
-    Context: {context}
-    """
-
-    If possible, consider sources from both Dutch and English language sources.
-    ''')
-
-  empirical_system_prompt = PromptTemplate(template=empirical_system_prompt_template,
-                                 input_variables=["context"])
-
-  empirical_system_message_prompt = SystemMessagePromptTemplate(prompt = empirical_system_prompt)
-  empirical_human_template = "{question}"
-  empirical_human_message_prompt = HumanMessagePromptTemplate.from_template(empirical_human_template)
-  empirical_chat_prompt = ChatPromptTemplate.from_messages([empirical_system_message_prompt, empirical_human_message_prompt])
-
-  # Setup empirical reorder
-  empirical_compression_retriever_reordered = ContextualCompressionRetriever(
-    base_compressor=pipeline, base_retriever=empirical.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
-
-  # Initialize empirical chain
+   # Initialize empirical chain
   empirical_chain = ConversationalRetrievalChain.from_llm(
-    llm=llm,
+    llm=empirical_llm,
     retriever=empirical_compression_retriever_reordered,
     chain_type="stuff",
     combine_docs_chain_kwargs={'prompt': empirical_chat_prompt},
@@ -241,53 +347,16 @@ async def setup_chain(settings):
       counter += 1
     return str(results['answer'])
 
-  # Set up writing chain prompt
-  writing_system_prompt_template = (
-    '''You help me write academic texts of a length specified by the user. 
-    For this, you consider the input and chat history and you write a coherent, essay-like text based on this information.
-
-    """
-    Chat history: {chat_history}
-    """
-    """
-    Input: {input}
-    """
-
-    ''')
-
-  writing_system_prompt = PromptTemplate(template=writing_system_prompt_template,
-                                 input_variables=["chat_history", "input"],
-                                 )
-
-  # Initialize writing chain
+ # Initialize writing chain
   writing_chain = ConversationChain(
-    llm=llm,
+    llm=writing_llm,
     prompt=writing_system_prompt,
     memory=readonlymemory,
   )
 
-  # Set up writing chain prompt
-  critical_system_prompt_template = (
-    '''You are a critical academic commentator.
-    You consider the input and chat history and you consider the arguments made in it and offer a critique of them.
-    When offering a critique, you also offer suggestions for improvement of the argument.
-
-    """
-    Chat history: {chat_history}
-    """
-    """
-    Input: {input}
-    """
-
-    ''')
-
-  critical_system_prompt = PromptTemplate(template=critical_system_prompt_template,
-                                 input_variables=["chat_history", "input"],
-                                 )
-
   # Initialize writing chain
   critical_chain = ConversationChain(
-    llm=llm,
+    llm=critique_llm,
     prompt=critical_system_prompt,
     memory=readonlymemory,
   )
@@ -335,7 +404,7 @@ async def setup_chain(settings):
 
   # Set up agent
   agent = initialize_agent(tools,
-                           llm=llm,
+                           llm=agent_llm,
                            agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
                            verbose=True,
                            memory=memory,
