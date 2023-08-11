@@ -225,7 +225,7 @@ mc_system_prompt_template = (
   In that case, correct your last generated response as instructed by the user, rather than making a new question.
   ''')
 
-mc_system_prompt = PromptTemplate(template=critical_system_prompt_template,
+mc_system_prompt = PromptTemplate(template=mc_system_prompt_template,
                                         input_variables=["chat_history", "input"],
                                         )
 # Set up source file
