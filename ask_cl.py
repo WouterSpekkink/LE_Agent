@@ -244,7 +244,7 @@ async def start():
         id="Agent_Model",
         label="OpenAI - Agent Model",
         values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        initial_index=1,
       ),
       Slider(
         id="Agent_Temperature",
@@ -258,7 +258,7 @@ async def start():
         id="Conceptual_Model",
         label="OpenAI - Conceptual Model",
         values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        initial_index=1,
       ),
       Slider(
         id="Conceptual_Temperature",
@@ -272,7 +272,7 @@ async def start():
         id="Empirical_Model",
         label="OpenAI - Empirical Model",
         values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        initial_index=1,
       ),
       Slider(
         id="Empirical_Temperature",
@@ -286,7 +286,7 @@ async def start():
         id="Writing_Model",
         label="OpenAI - Writing Model",
         values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        initial_index=1,
       ),
       Slider(
         id="Writing_Temperature",
@@ -300,7 +300,7 @@ async def start():
         id="Critique_Model",
         label="OpenAI - Critique Model",
         values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        initial_index=1,
       ),
       Slider(
         id="Critique_Temperature",
@@ -314,7 +314,7 @@ async def start():
         id="MC_Model",
         label="OpenAI - MC Model",
         values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        initial_index=1,
       ),
       Slider(
         id="MC_Temperature",
@@ -365,7 +365,7 @@ async def setup_chain(settings):
     combine_docs_chain_kwargs={'prompt': conceptual_chat_prompt},
     memory=readonlymemory,
     return_source_documents=True,
-    condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo'),
+    condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo-16k'),
   )
 
   # Wrap chain
@@ -376,6 +376,9 @@ async def setup_chain(settings):
       file.write("* Tool: Conceptual tool\n")
       file.write("* Query:\n")
       file.write(question)
+      file.write("\n")
+      file.write("* Answer:\n")
+      file.write(results['answer'])
       file.write("\n")
       counter = 1
       for source in sources:
@@ -396,7 +399,7 @@ async def setup_chain(settings):
     combine_docs_chain_kwargs={'prompt': empirical_chat_prompt},
     memory=readonlymemory,
     return_source_documents = True,
-    condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo'),
+    condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo-16k'),
   )
 
   # Wrap empirical chain
@@ -407,6 +410,9 @@ async def setup_chain(settings):
       file.write("* Tool: Empirical tool\n\n")
       file.write("* Query:\n")
       file.write(question)
+      file.write("\n")
+      file.write("* Answer:\n")
+      file.write(results['answer'])
       file.write("\n")
       counter = 1
       for source in sources:
@@ -497,7 +503,7 @@ async def setup_chain(settings):
                            verbose=True,
                            memory=memory,
                            handle_parsing_errors=True,
-                           condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo'),
+                           condense_question_llm = ChatOpenAI(temperature=0, model='gpt-3.5-turbo-16k'),
                            )
 
   cl.user_session.set("agent", agent)
