@@ -198,6 +198,7 @@ mc_system_prompt_template = (
   - The wrong answers should really be wrong and not partially correct
   - The answers should be more or less of the same length
   - Answers are never allowed to be something like 'all of the above.'
+  - Answers should always be phrased positively, rather than negatively.
   - Every question should ask only one question; do not put multiple questions together
   
   The user typically needs multiple questions on the same topic, so make sure there is some diversity in the questions you come up with.
