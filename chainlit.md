@@ -5,6 +5,8 @@ The agent has three tools at its disposal:
 1. A conceptual tool that is a ConversationalRetrievalChain with access to a vectorstore that should contain theoretical knowledge, for example in the form of books or papers.
 2. An empirical tool that is a ConversationalRetrievalChain with access to a vectorstore that should contain empirical information.
 3. A writing tool that is prompted to focus entirely on writing tasks.
+4. A critiqueing tool that can be used to critique texts and offer possible suggestions for improvement.
+5. A multiple choice tool that can be used to create multiple choice questions based on the discussed content.
 
 The tools have access to a shared memory. 
 The writing tool and the agent currently have read only access. 
