@@ -191,8 +191,7 @@ mc_system_prompt_template = (
   
   The multiple choice questions should adhere to a couple of rules:
   - Questions should always end with a question mark
-  - Questions should not refer to the answer options, because they should be answerable without reading the answer options
-  For example, a question that starts with "Which of the following" is not allowed.
+  - Questions should not refer to the answer options, because they should be answerable without reading the answer options. For example, a question that includes the phrase "which of the following" is not allowed.
   - There should always be four answer options, of which one is correct and the others are plausible but incorrect
   - All answer options should be relevant to the topic of the question.
   - The wrong answers should really be wrong and not partially correct
@@ -206,7 +205,9 @@ mc_system_prompt_template = (
   
   The question must not directly refer to 'the context', as the person who will need to answer the question cannot see the context provided to you.
   The question must be stand-alone.
-  If you wish to introduce the question with an example, you should come up with that example.
+
+  Do not make the questions too easy.
+  Make sure that the wrong answers are not too obviously wrong.
 
   Format your answers as follows:
   """
