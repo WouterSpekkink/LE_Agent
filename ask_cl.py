@@ -434,12 +434,38 @@ async def setup_chain(settings):
     memory=readonlymemory,
   )
 
-  # Initialize writing chain
+  # Wrap chain
+  def run_writing_chain(question):
+    results = writing_chain({"input": question}, return_only_outputs=True)
+    with open(filename, 'a') as file:
+      file.write("* Tool: Writing tool\n")
+      file.write("* Query:\n")
+      file.write(question)
+      file.write("\n")
+      file.write("* Answer:\n")
+      file.write(results['response'])
+      file.write("\n")
+    return str(results['response'])
+
+  # Initialize critique chain
   critical_chain = ConversationChain(
     llm=critique_llm,
     prompt=critical_system_prompt,
     memory=readonlymemory,
   )
+
+  # Wrap chain
+  def run_critique_chain(question):
+    results = critique_chain({"input": question}, return_only_outputs=True)
+    with open(filename, 'a') as file:
+      file.write("* Tool: Critique tool\n")
+      file.write("* Query:\n")
+      file.write(question)
+      file.write("\n")
+      file.write("* Answer:\n")
+      file.write(results['response'])
+      file.write("\n")
+    return str(results['response'])
 
   # Initialize MC chain
   mc_chain = ConversationChain(
@@ -447,6 +473,19 @@ async def setup_chain(settings):
     prompt=mc_system_prompt,
     memory=readonlymemory,
   )
+
+  # Wrap chain
+  def run_mc_chain(question):
+    results = mc_chain({"input": question}, return_only_outputs=True)
+    with open(filename, 'a') as file:
+      file.write("* Tool: MC tool\n")
+      file.write("* Query:\n")
+      file.write(question)
+      file.write("\n")
+      file.write("* Answer:\n")
+      file.write(results['response'])
+      file.write("\n")
+    return str(results['response'])
 
   # Add chains to toolbox.
   tools = [
@@ -471,7 +510,7 @@ async def setup_chain(settings):
       ),
     Tool(
       name="Writing tool",
-      func=writing_chain.run,
+      func=run_writing_chain,
       description="""Useful for when you need to output texts based on input from the empirical and conceptual tool.
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
@@ -480,7 +519,7 @@ async def setup_chain(settings):
       ),
     Tool(
       name="Critique tool",
-      func=writing_chain.run,
+      func=run_critique_chain,
       description="""Useful for when you need to offer a critique on something that was said before."
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
@@ -489,7 +528,7 @@ async def setup_chain(settings):
       ),
     Tool(
       name="MC tool",
-      func=mc_chain.run,
+      func=run_mc_chain,
       description="""Useful for when you need to develop multiple choice questions."
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
