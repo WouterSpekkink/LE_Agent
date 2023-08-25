@@ -245,8 +245,8 @@ async def start():
       Select(
         id="Agent_Model",
         label="OpenAI - Agent Model",
-        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=1,
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
       ),
       Slider(
         id="Agent_Temperature",
@@ -259,8 +259,8 @@ async def start():
       Select(
         id="Conceptual_Model",
         label="OpenAI - Conceptual Model",
-        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=1,
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
       ),
       Slider(
         id="Conceptual_Temperature",
@@ -273,8 +273,8 @@ async def start():
       Select(
         id="Empirical_Model",
         label="OpenAI - Empirical Model",
-        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=1,
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
       ),
       Slider(
         id="Empirical_Temperature",
@@ -287,8 +287,8 @@ async def start():
       Select(
         id="Writing_Model",
         label="OpenAI - Writing Model",
-        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=1,
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
       ),
       Slider(
         id="Writing_Temperature",
@@ -301,8 +301,8 @@ async def start():
       Select(
         id="Critique_Model",
         label="OpenAI - Critique Model",
-        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=1,
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
       ),
       Slider(
         id="Critique_Temperature",
@@ -315,8 +315,8 @@ async def start():
       Select(
         id="MC_Model",
         label="OpenAI - MC Model",
-        values=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=1,
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
       ),
       Slider(
         id="MC_Temperature",
