@@ -7,6 +7,7 @@ The agent has multiple tools at its disposal:
 3. A writing tool that is prompted to focus entirely on writing tasks.
 4. A critiqueing tool that can be used to critique texts and offer possible suggestions for improvement.
 5. A multiple choice tool that can be used to create multiple choice questions based on the discussed content.
+6. A search tool that allows Google searches.
 
 The tools have access to a shared memory. 
 Only the agent has write access to that memory.

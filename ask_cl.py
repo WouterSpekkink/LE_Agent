@@ -5,13 +5,13 @@ from langchain.memory import ConversationBufferMemory, ReadOnlySharedMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain.callbacks import OpenAICallbackHandler
 from langchain import ConversationChain
-from langchain.agents import initialize_agent, Tool
-from langchain.agents import AgentType
+from langchain.agents import initialize_agent, Tool, AgentType, load_tools
 from langchain.tools import BaseTool
 from langchain.llms import OpenAI
 from langchain.document_transformers import LongContextReorder, EmbeddingsRedundantFilter
 from langchain.retrievers.document_compressors import DocumentCompressorPipeline
 from langchain.retrievers import ContextualCompressionRetriever
+from langchain.utilities import GoogleSerperAPIWrapper
 from langchain.prompts import (
     ChatPromptTemplate,
     PromptTemplate,
@@ -40,8 +40,11 @@ def string_cleanup(string):
 
 # Set OpenAI API Key
 load_dotenv()
-os.environ["OPENAI_API_KEY"] = constants.APIKEY
-openai.api_key = constants.APIKEY 
+os.environ["OPENAI_API_KEY"] = constants.OPENAIKEY
+openai.api_key = constants.OPENAIKEY 
+
+# Set Serper API Key
+os.environ["SERPER_API_KEY"] = constants.SERPERKEY
 
 # Load FAISS databases
 embeddings = OpenAIEmbeddings()
@@ -487,6 +490,9 @@ async def setup_chain(settings):
       file.write("\n")
     return str(results['response'])
 
+  # Search API wrapper
+  search = GoogleSerperAPIWrapper()
+
   # Add chains to toolbox.
   tools = [
     Tool(
@@ -535,8 +541,13 @@ async def setup_chain(settings):
       """,
       return_direct=True,
       ),
+    Tool(
+        name="Search tool",
+        func=search.run,
+        description="useful for when you need to ask with search",
+      ),
     ]
-
+  
   # Set up agent
   agent = initialize_agent(tools,
                            llm=agent_llm,
