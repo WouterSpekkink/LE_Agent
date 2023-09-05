@@ -46,10 +46,18 @@ openai.api_key = constants.OPENAIKEY
 # Set Serper API Key
 os.environ["SERPER_API_KEY"] = constants.SERPERKEY
 
-# Load FAISS databases
+# Load conceptual FAISS databases
 embeddings = OpenAIEmbeddings()
-conceptual = FAISS.load_local("./conceptual_vectorstore/", embeddings)
-empirical = FAISS.load_local("./empirical_vectorstore/", embeddings)
+conceptual_all = FAISS.load_local("./conceptual_vectorstore/Literature_All/", embeddings)
+conceptual_dics = FAISS.load_local("./conceptual_vectorstore/Literature_DiCS/", embeddings)
+conceptual_sturing = FAISS.load_local("./conceptual_vectorstore/Literature_Sturing/", embeddings)
+conceptual_ng = FAISS.load_local("./conceptual_vectorstore/Literature_Network_Governance/", embeddings)
+
+# Load empirical FAISS databases
+empirical_ld = FAISS.load_local("./empirical_vectorstore/Empirical_Loss_and_Damage/", embeddings)
+empirical_nitrogen = FAISS.load_local("./empirical_vectorstore/Empirical_Nitrogen/", embeddings)
+empirical_inland_shipping = FAISS.load_local("./empirical_vectorstore/Empirical_Inland_Shipping/", embeddings)
+empirical_samso = FAISS.load_local("./empirical_vectorstore/Empirical_Samso/", embeddings)
 
 # Set up callback handler
 handler = OpenAICallbackHandler()
@@ -87,13 +95,6 @@ conceptual_system_message_prompt = SystemMessagePromptTemplate(prompt = conceptu
 conceptual_human_template = "{question}"
 conceptual_human_message_prompt = HumanMessagePromptTemplate.from_template(conceptual_human_template)
 conceptual_chat_prompt = ChatPromptTemplate.from_messages([conceptual_system_message_prompt, conceptual_human_message_prompt])
-
-# Set up conceptual chain reordering
-redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
-reordering = LongContextReorder()
-pipeline = DocumentCompressorPipeline(transformers=[redundant_filter, reordering])
-conceptual_compression_retriever_reordered = ContextualCompressionRetriever(
-  base_compressor=pipeline, base_retriever=conceptual.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
 
 # Set up empirical chain prompt
 empirical_system_prompt_template = (
@@ -136,10 +137,6 @@ empirical_system_message_prompt = SystemMessagePromptTemplate(prompt = empirical
 empirical_human_template = "{question}"
 empirical_human_message_prompt = HumanMessagePromptTemplate.from_template(empirical_human_template)
 empirical_chat_prompt = ChatPromptTemplate.from_messages([empirical_system_message_prompt, empirical_human_message_prompt])
-
-# Setup empirical reorder
-empirical_compression_retriever_reordered = ContextualCompressionRetriever(
-  base_compressor=pipeline, base_retriever=empirical.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
 
 # Set up writing chain prompt
 writing_system_prompt_template = (
@@ -246,6 +243,18 @@ async def start():
   settings = await cl.ChatSettings(
     [
       Select(
+        id="Conceptual_Store",
+        label="Conceptual vector store",
+        values=["All", "DiCS", "Sturing", "Network Governance"],
+        initial_index=0,
+      ),
+      Select(
+        id="Empirical_Store",
+        label="Empirical vector store",
+        values=["Loss and Damage", "Nitrogen", "Inland Shipping", "Samso"],
+        initial_index=0,
+      ),
+      Select(
         id="Agent_Model",
         label="OpenAI - Agent Model",
         values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
@@ -302,14 +311,14 @@ async def start():
         step=0.1,
       ),
       Select(
-        id="Critique_Model",
-        label="OpenAI - Critique Model",
+        id="Critical_Model",
+        label="OpenAI - Critical Model",
         values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
-        id="Critique_Temperature",
-        label="OpenAI - Critique Temperature",
+        id="Critical_Temperature",
+        label="OpenAI - Critical Temperature",
         initial=0,
         min=0,
         max=2,
@@ -336,6 +345,41 @@ async def start():
 # When settings are updated
 @cl.on_settings_update
 async def setup_chain(settings):
+  # Set conceptual vector store
+  chosen_conceptual = settings["Conceptual_Store"]
+  conceptual = ""
+  if (chosen_conceptual == "All"):
+    conceptual = conceptual_all
+  elif (chosen_conceptual == "DiCS"):
+    conceptual = conceptual_dics
+  elif (chosen_conceptual == "Sturing"):
+    conceptual = conceptual_sturing
+  elif (chosen_conceptual == "Network Governance"):
+    conceptual = conceptual_ng
+
+  # Set up conceptual chain reordering
+  redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
+  reordering = LongContextReorder()
+  pipeline = DocumentCompressorPipeline(transformers=[redundant_filter, reordering])
+  conceptual_compression_retriever_reordered = ContextualCompressionRetriever(
+    base_compressor=pipeline, base_retriever=conceptual.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
+  
+  # Set empirical vector store
+  chosen_empirical = settings["Empirical_Store"]
+  empirical = ""
+  if (chosen_empirical == "Loss and Damage"):
+    empirical = empirical_ld
+  elif (chosen_empirical == "Nitrogen"):
+    empirical = empirical_nitrogen
+  elif (chosen_empirical == "Inland Shipping"):
+    empirical = empirical_inland_shipping
+  elif (chosen_empirical == "Samso"):
+    empirical = empirical_samso
+
+  # Setup empirical reorder
+  empirical_compression_retriever_reordered = ContextualCompressionRetriever(
+    base_compressor=pipeline, base_retriever=empirical.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
+
   # Set llms
   agent_llm=ChatOpenAI(
     temperature=settings["Agent_Temperature"],
@@ -353,9 +397,9 @@ async def setup_chain(settings):
     temperature=settings["Writing_Temperature"],
     model=settings["Writing_Model"],
   )
-  critique_llm=ChatOpenAI(
-    temperature=settings["Critique_Temperature"],
-    model=settings["Critique_Model"],
+  critical_llm=ChatOpenAI(
+    temperature=settings["Critical_Temperature"],
+    model=settings["Critical_Model"],
   )
   mc_llm=ChatOpenAI(
     temperature=settings["MC_Temperature"],
@@ -450,18 +494,18 @@ async def setup_chain(settings):
       file.write("\n")
     return str(results['response'])
 
-  # Initialize critique chain
+  # Initialize critical chain
   critical_chain = ConversationChain(
-    llm=critique_llm,
+    llm=critical_llm,
     prompt=critical_system_prompt,
     memory=readonlymemory,
   )
 
   # Wrap chain
-  def run_critique_chain(question):
-    results = critique_chain({"input": question}, return_only_outputs=True)
+  def run_critical_chain(question):
+    results = critical_chain({"input": question}, return_only_outputs=True)
     with open(filename, 'a') as file:
-      file.write("* Tool: Critique tool\n")
+      file.write("* Tool: Critical tool\n")
       file.write("* Query:\n")
       file.write(question)
       file.write("\n")
@@ -524,8 +568,8 @@ async def setup_chain(settings):
       return_direct=True,
       ),
     Tool(
-      name="Critique tool",
-      func=run_critique_chain,
+      name="Critical tool",
+      func=run_critical_chain,
       description="""Useful for when you need to offer a critique on something that was said before."
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
@@ -544,7 +588,8 @@ async def setup_chain(settings):
     Tool(
         name="Search tool",
         func=search.run,
-        description="useful for when you need to ask with search",
+        description="""Useful for when the user asks you to search for something on the internet.
+        Only use this if the user explicitly asks you to search the internet."""
       ),
     ]
   
