@@ -59,6 +59,7 @@ empirical_nitrogen = FAISS.load_local("./empirical_vectorstore/Empirical_Nitroge
 empirical_inland_shipping = FAISS.load_local("./empirical_vectorstore/Empirical_Inland_Shipping/", embeddings)
 empirical_samso = FAISS.load_local("./empirical_vectorstore/Empirical_Samso/", embeddings)
 empirical_jsf = FAISS.load_local("./empirical_vectorstore/Empirical_JSF/", embeddings)
+empirical_delta = FAISS.load_local("./empirical_vectorstore/Empirical_Deltaprogramma/", embeddings)
 
 # Set up callback handler
 handler = OpenAICallbackHandler()
@@ -252,7 +253,7 @@ async def start():
       Select(
         id="Empirical_Store",
         label="Empirical vector store",
-        values=["Loss and Damage", "Nitrogen", "Inland Shipping", "Samso", "JSF"],
+        values=["Loss and Damage", "Nitrogen", "Inland Shipping", "Samso", "JSF", "Deltaprogramma"],
         initial_index=0,
       ),
       Select(
@@ -378,6 +379,8 @@ async def setup_chain(settings):
     empirical = empirical_samso
   elif (chosen_empirical == "JSF"):
     empirical = empirical_jsf
+  elif (chosen_empirical == "Deltaprogramma"):
+    empirical = empirical_delta
 
   # Setup empirical reorder
   empirical_compression_retriever_reordered = ContextualCompressionRetriever(
