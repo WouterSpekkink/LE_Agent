@@ -52,6 +52,7 @@ conceptual_all = FAISS.load_local("./conceptual_vectorstore/Literature_All/", em
 conceptual_dics = FAISS.load_local("./conceptual_vectorstore/Literature_DiCS/", embeddings)
 conceptual_sturing = FAISS.load_local("./conceptual_vectorstore/Literature_Sturing/", embeddings)
 conceptual_ng = FAISS.load_local("./conceptual_vectorstore/Literature_Network_Governance/", embeddings)
+conceptual_beleidsdynamiek = FAISS.load_local("./conceptual_vectorstore/Literature_Beleidsdynamiek/", embeddings)
 
 # Load empirical FAISS databases
 empirical_ld = FAISS.load_local("./empirical_vectorstore/Empirical_Loss_and_Damage/", embeddings)
@@ -247,7 +248,7 @@ async def start():
       Select(
         id="Conceptual_Store",
         label="Conceptual vector store",
-        values=["All", "DiCS", "Sturing", "Network Governance"],
+        values=["All", "DiCS", "Sturing", "Network Governance", "Beleidsdynamiek"],
         initial_index=0,
       ),
       Select(
@@ -358,6 +359,8 @@ async def setup_chain(settings):
     conceptual = conceptual_sturing
   elif (chosen_conceptual == "Network Governance"):
     conceptual = conceptual_ng
+  elif (chosen_conceptual == "Beleidsdynamiek"):
+    conceptual = conceptual_beleidsdynamiek
 
   # Set up conceptual chain reordering
   redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
