@@ -27,7 +27,7 @@ from langchain.schema import (
 from datetime import datetime
 from dotenv import load_dotenv
 import chainlit as cl
-from chainlit.input_widget import Select, Slider
+from chainlit.input_widget import Select, Slider, Switch
 import os
 import sys
 import constants
@@ -259,6 +259,8 @@ async def start():
                 "Samso", "JSF", "Deltaprogramma", "RKA"],
         initial_index=0,
       ),
+      Switch(id="Search_Tool_ON", label="Search tool", initial=True),
+      Switch(id="Critical_Tool_ON", label="Critical tool", initial=True),
       Select(
         id="Agent_Model",
         label="OpenAI - Agent Model",
@@ -418,6 +420,8 @@ async def setup_chain(settings):
     temperature=settings["MC_Temperature"],
     model=settings["MC_Model"],
   )
+  st_on = settings["Search_Tool_ON"]
+  ct_on = settings["Critical_Tool_ON"]
 
    # Initialize chain
   conceptual_chain = ConversationalRetrievalChain.from_llm(
@@ -581,15 +585,6 @@ async def setup_chain(settings):
       return_direct=True,
       ),
     Tool(
-      name="Critical tool",
-      func=run_critical_chain,
-      description="""Useful for when you need to offer a critique on something that was said before."
-      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
-      The question should end with a question mark.
-      """,
-      return_direct=True,
-      ),
-    Tool(
       name="MC tool",
       func=run_mc_chain,
       description="""Useful for when you need to develop multiple choice questions."
@@ -598,13 +593,24 @@ async def setup_chain(settings):
       """,
       return_direct=True,
       ),
-    Tool(
-        name="Search tool",
-        func=search.run,
-        description="""Useful for when the user asks you to search for something on the internet.
-        Only use this if the user explicitly asks you to search the internet."""
-      ),
-    ]
+  ]
+
+  if st_on:
+    tools.append(Tool(
+      name="Search tool",
+      func=search.run,
+      description="""Useful for when the user asks you to search for something on the internet.
+      Only use this if the user explicitly asks you to search the internet."""
+    ))
+  if ct_on:
+    tools.append(Tool(
+      name="Critical tool",
+      func=run_critical_chain,
+      description="""Useful for when you need to offer a critique on something that was said before."
+      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
+      The question should end with a question mark.
+      """,
+      return_direct=True))
   
   # Set up agent
   agent = initialize_agent(tools,
