@@ -234,6 +234,30 @@ mc_system_prompt_template = (
 mc_system_prompt = PromptTemplate(template=mc_system_prompt_template,
                                         input_variables=["chat_history", "input"],
                                         )
+# Customize prompt
+oq_system_prompt_template = (
+  '''You are a university professor in the field of governance in the public sector.
+  You are also a test expert specialized in making open exam questions.
+  You make open exam questions based on the chat history and the input provided below.
+  
+  The user will ask to formulate a question about a certain topic, so make sure the answer is about that topic.
+  
+  """
+  Chat history: {chat_history}
+  """
+  """
+  Input: {input}
+  """
+  
+  The question must not directly refer to 'the context', as the person who will need to answer the question cannot see the context provided to you.
+  The question must be stand-alone.
+
+  ''')
+
+oq_system_prompt = PromptTemplate(template=oq_system_prompt_template,
+                                        input_variables=["chat_history", "input"],
+                                        )
+
 # Set up source file
 now = datetime.now()
 timestamp = now.strftime("%Y%m%d_%H%M%S")
@@ -345,6 +369,20 @@ async def start():
         max=2,
         step=0.1,
       ),
+      Select(
+        id="OQ_Model",
+        label="OpenAI - Open Question Model",
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Slider(
+        id="OQ_Temperature",
+        label="OpenAI - Open Question Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
     ]
   ).send()
   await setup_chain(settings)
@@ -419,6 +457,10 @@ async def setup_chain(settings):
   mc_llm=ChatOpenAI(
     temperature=settings["MC_Temperature"],
     model=settings["MC_Model"],
+  )
+  oq_llm=ChatOpenAI(
+    temperature=settings["OQ_Temperature"],
+    model=settings["OQ_Model"],
   )
   st_on = settings["Search_Tool_ON"]
   ct_on = settings["Critical_Tool_ON"]
@@ -551,6 +593,26 @@ async def setup_chain(settings):
       file.write("\n")
     return str(results['response'])
 
+  # Initialize MC chain
+  oq_chain = ConversationChain(
+    llm=oq_llm,
+    prompt=oq_system_prompt,
+    memory=readonlymemory,
+  )
+
+  # Wrap chain
+  def run_oq_chain(question):
+    results = oq_chain({"input": question}, return_only_outputs=True)
+    with open(filename, 'a') as file:
+      file.write("* Tool: Open Question tool\n")
+      file.write("* Query:\n")
+      file.write(question)
+      file.write("\n")
+      file.write("* Answer:\n")
+      file.write(results['response'])
+      file.write("\n")
+    return str(results['response'])
+
   # Search API wrapper
   search = GoogleSerperAPIWrapper()
 
@@ -579,6 +641,15 @@ async def setup_chain(settings):
       name="Writing tool",
       func=run_writing_chain,
       description="""Useful for when you need to output texts based on input from the empirical and conceptual tool.
+      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
+      The question should end with a question mark.
+      """,
+      return_direct=True,
+      ),
+    Tool(
+      name="Open Question tool",
+      func=run_oq_chain,
+      description="""Useful for when you need to develop open exam questions."
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       """,
