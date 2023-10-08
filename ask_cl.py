@@ -178,6 +178,27 @@ critical_system_prompt_template = (
 critical_system_prompt = PromptTemplate(template=critical_system_prompt_template,
                                         input_variables=["chat_history", "input"],
                                         )
+
+# Set up writing chain prompt
+case_system_prompt_template = (
+  '''You help me write texts that I can use as (possibly fictional) case descriptions that can be used for in-class assignments or examples.
+  For this, you consider the input and chat history and you write a richt, interesting text that embeds elements of what you have learned in the text.
+  However, your text should not name concepts or mechanisms explicitly. It should illustrate the concepts or mechanisms without making their presence too obious.
+  The case studies should be engaging to read. 
+  
+  """
+  Chat history: {chat_history}
+  """
+  """
+  Input: {input}
+  """
+  
+  ''')
+
+case_system_prompt = PromptTemplate(template=writing_system_prompt_template,
+                                    input_variables=["chat_history", "input"],
+                                    )
+
 # Customize prompt
 mc_system_prompt_template = (
   '''You are a university professor in the field of governance in the public sector.
@@ -284,7 +305,10 @@ async def start():
         initial_index=0,
       ),
       Switch(id="Search_Tool_ON", label="Search tool", initial=True),
+      Switch(id="Writing_Tool_ON", label="Writing tool", initial=True),
       Switch(id="Critical_Tool_ON", label="Critical tool", initial=True),
+      Switch(id="Case_Tool_ON", label="Case tool", initial=True),
+      Switch(id="Agent_Control_ON", label="Agent control", initial=True),
       Select(
         id="Agent_Model",
         label="OpenAI - Agent Model",
@@ -350,6 +374,20 @@ async def start():
       Slider(
         id="Critical_Temperature",
         label="OpenAI - Critical Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
+      ),
+      Select(
+        id="Case_Model",
+        label="OpenAI - Case Model",
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        initial_index=0,
+      ),
+      Slider(
+        id="Case_Temperature",
+        label="OpenAI - Case Temperature",
         initial=0,
         min=0,
         max=2,
@@ -454,6 +492,10 @@ async def setup_chain(settings):
     temperature=settings["Critical_Temperature"],
     model=settings["Critical_Model"],
   )
+  case_llm=ChatOpenAI(
+    temperature=settings["Case_Temperature"],
+    model=settings["Case_Model"],
+  )
   mc_llm=ChatOpenAI(
     temperature=settings["MC_Temperature"],
     model=settings["MC_Model"],
@@ -463,7 +505,10 @@ async def setup_chain(settings):
     model=settings["OQ_Model"],
   )
   st_on = settings["Search_Tool_ON"]
+  wr_on = settings["Writing_Tool_ON"]
   ct_on = settings["Critical_Tool_ON"]
+  ca_on = settings["Case_Tool_ON"]
+  ag_on = not settings["Agent_Control_ON"]
 
    # Initialize chain
   conceptual_chain = ConversationalRetrievalChain.from_llm(
@@ -573,6 +618,26 @@ async def setup_chain(settings):
       file.write("\n")
     return str(results['response'])
 
+  # Initialize critical chain
+  case_chain = ConversationChain(
+    llm=case_llm,
+    prompt=case_system_prompt,
+    memory=readonlymemory,
+  )
+
+  # Wrap chain
+  def run_case_chain(question):
+    results = case_chain({"input": question}, return_only_outputs=True)
+    with open(filename, 'a') as file:
+      file.write("* Tool: Case tool\n")
+      file.write("* Query:\n")
+      file.write(question)
+      file.write("\n")
+      file.write("* Answer:\n")
+      file.write(results['response'])
+      file.write("\n")
+    return str(results['response'])
+
   # Initialize MC chain
   mc_chain = ConversationChain(
     llm=mc_llm,
@@ -625,7 +690,7 @@ async def setup_chain(settings):
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       """,
-      return_direct=True,
+      return_direct=ag_on,
       ),
     Tool(
       name="Empirical tool",
@@ -635,16 +700,7 @@ async def setup_chain(settings):
       The question should end with a question mark.
       The input should be a fully formed question. 
 ;      """,
-      return_direct=True,
-      ),
-    Tool(
-      name="Writing tool",
-      func=run_writing_chain,
-      description="""Useful for when you need to output texts based on input from the empirical and conceptual tool.
-      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
-      The question should end with a question mark.
-      """,
-      return_direct=True,
+      return_direct=ag_on,
       ),
     Tool(
       name="Open Question tool",
@@ -653,7 +709,7 @@ async def setup_chain(settings):
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       """,
-      return_direct=True,
+      return_direct=ag_on,
       ),
     Tool(
       name="MC tool",
@@ -662,7 +718,7 @@ async def setup_chain(settings):
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       """,
-      return_direct=True,
+      return_direct=ag_on,
       ),
   ]
 
@@ -673,6 +729,16 @@ async def setup_chain(settings):
       description="""Useful for when the user asks you to search for something on the internet.
       Only use this if the user explicitly asks you to search the internet."""
     ))
+  if wr_on:
+    tools.append(Tool(
+      name="Writing tool",
+      func=run_writing_chain,
+      description="""Useful for when you need to output texts based on input from the empirical and conceptual tool.
+      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
+      The question should end with a question mark.
+      """,
+      return_direct=ag_on,
+    ))
   if ct_on:
     tools.append(Tool(
       name="Critical tool",
@@ -681,7 +747,18 @@ async def setup_chain(settings):
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       """,
-      return_direct=True))
+      return_direct=ag_on))
+  if ca_on:
+    tools.append(Tool(
+      name="Case tool",
+      func=run_case_chain,
+      description="""Useful for when you need to output case descriptions, usually based on output from the empirical and conceptual tool.
+      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
+      The question should end with a question mark.
+      """,
+      return_direct=ag_on,
+    ))
+
   
   # Set up agent
   agent = initialize_agent(tools,
