@@ -304,10 +304,14 @@ async def start():
                 "Samso", "JSF", "Deltaprogramma", "RKA"],
         initial_index=0,
       ),
+      Switch(id="Conceptual_Tool_ON", label="Conceptual tool", initial=True),
+      Switch(id="Empirical_Tool_ON", label="Empirical tool", initial=True),
       Switch(id="Search_Tool_ON", label="Search tool", initial=True),
       Switch(id="Writing_Tool_ON", label="Writing tool", initial=True),
       Switch(id="Critical_Tool_ON", label="Critical tool", initial=True),
       Switch(id="Case_Tool_ON", label="Case tool", initial=True),
+      Switch(id="MC_Tool_ON", label="Multiple Choice tool", initial=True),
+      Switch(id="OQ_Tool_ON", label="Open Questionn tool", initial=True),
       Switch(id="Agent_Control_ON", label="Agent control", initial=True),
       Select(
         id="Agent_Model",
@@ -326,7 +330,7 @@ async def start():
       Select(
         id="Conceptual_Model",
         label="OpenAI - Conceptual Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -340,8 +344,24 @@ async def start():
       Select(
         id="Empirical_Model",
         label="OpenAI - Empirical Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
         initial_index=0,
+      ),
+      Slider(
+        id="Num_Docs_Emp",
+        label="Number of empirical documents",
+        initial=20,
+        min=5,
+        max=20,
+        step=1,
+      ),
+      Slider(
+        id="Num_Docs_Con",
+        label="Number of conceptual documents",
+        initial=20,
+        min=5,
+        max=20,
+        step=1,
       ),
       Slider(
         id="Empirical_Temperature",
@@ -354,7 +374,7 @@ async def start():
       Select(
         id="Writing_Model",
         label="OpenAI - Writing Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -368,7 +388,7 @@ async def start():
       Select(
         id="Critical_Model",
         label="OpenAI - Critical Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -382,7 +402,7 @@ async def start():
       Select(
         id="Case_Model",
         label="OpenAI - Case Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -396,7 +416,7 @@ async def start():
       Select(
         id="MC_Model",
         label="OpenAI - MC Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -410,7 +430,7 @@ async def start():
       Select(
         id="OQ_Model",
         label="OpenAI - Open Question Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -428,6 +448,10 @@ async def start():
 # When settings are updated
 @cl.on_settings_update
 async def setup_chain(settings):
+  # Set number of documents fetched
+  k_conceptual = settings["Num_Docs_Con"]
+  k_empirical = settings[|"Num_Docs_Emp"]
+  
   # Set conceptual vector store
   chosen_conceptual = settings["Conceptual_Store"]
   conceptual = ""
@@ -447,7 +471,7 @@ async def setup_chain(settings):
   reordering = LongContextReorder()
   pipeline = DocumentCompressorPipeline(transformers=[redundant_filter, reordering])
   conceptual_compression_retriever_reordered = ContextualCompressionRetriever(
-    base_compressor=pipeline, base_retriever=conceptual.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
+    base_compressor=pipeline, base_retriever=conceptual.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : k_conceptual, "score_threshold": .65}))
   
   # Set empirical vector store
   chosen_empirical = settings["Empirical_Store"]
@@ -469,7 +493,7 @@ async def setup_chain(settings):
 
   # Setup empirical reorder
   empirical_compression_retriever_reordered = ContextualCompressionRetriever(
-    base_compressor=pipeline, base_retriever=empirical.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : 20, "score_threshold": .65}))
+    base_compressor=pipeline, base_retriever=empirical.as_retriever(search_type="similarity_score_threshold", search_kwargs={"k" : k_empirical, "score_threshold": .65}))
 
   # Set llms
   agent_llm=ChatOpenAI(
@@ -504,10 +528,14 @@ async def setup_chain(settings):
     temperature=settings["OQ_Temperature"],
     model=settings["OQ_Model"],
   )
+  co_on = settings["Conceptual_Tool_ON"]
+  et_on = settings["Empirical_Tool_ON"]
   st_on = settings["Search_Tool_ON"]
   wr_on = settings["Writing_Tool_ON"]
   ct_on = settings["Critical_Tool_ON"]
   ca_on = settings["Case_Tool_ON"]
+  mc_on = settings["MC_Tool_ON"]
+  oq_on = settings["OQ_Tool_ON"]
   ag_on = not settings["Agent_Control_ON"]
 
    # Initialize chain
@@ -682,8 +710,9 @@ async def setup_chain(settings):
   search = GoogleSerperAPIWrapper()
 
   # Add chains to toolbox.
-  tools = [
-    Tool(
+  tools = []
+  if co_on:
+    tools.append(Tool(
       name="Conceptual tool",
       func=run_conceptual_chain,
       description="""Useful for when you need to understand a concept or theory.
@@ -691,27 +720,20 @@ async def setup_chain(settings):
       The question should end with a question mark.
       """,
       return_direct=ag_on,
-      ),
-    Tool(
+    ))
+  if et_on:
+    tools.append(Tool(
       name="Empirical tool",
       func=run_empirical_chain,
       description="""Useful for when you need empirical information on a topic.
       The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
       The question should end with a question mark.
       The input should be a fully formed question. 
-;      """,
+      ;      """,
       return_direct=ag_on,
-      ),
-    Tool(
-      name="Open Question tool",
-      func=run_oq_chain,
-      description="""Useful for when you need to develop open exam questions."
-      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
-      The question should end with a question mark.
-      """,
-      return_direct=ag_on,
-      ),
-    Tool(
+    ))
+  if mc_on:
+    tools.append(Tool(
       name="MC tool",
       func=run_mc_chain,
       description="""Useful for when you need to develop multiple choice questions."
@@ -719,9 +741,17 @@ async def setup_chain(settings):
       The question should end with a question mark.
       """,
       return_direct=ag_on,
-      ),
-  ]
-
+    ))
+  if oq_on:
+    tools.append(Tool(
+      name="Open Question tool",
+      func=run_oq_chain,
+      description="""Useful for when you need to develop open exam questions."
+      The input should be a fully formed question, not referencing any obscure pronouns from the conversation before.
+      The question should end with a question mark.
+      """,
+      return_direct=ag_on,
+    ))
   if st_on:
     tools.append(Tool(
       name="Search tool",
@@ -759,7 +789,6 @@ async def setup_chain(settings):
       return_direct=ag_on,
     ))
 
-  
   # Set up agent
   agent = initialize_agent(tools,
                            llm=agent_llm,
