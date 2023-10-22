@@ -1,10 +1,9 @@
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory, ReadOnlySharedMemory
-from langchain.chains import ConversationalRetrievalChain
+from langchain.chains import ConversationalRetrievalChain, ConversationChain
 from langchain.callbacks import OpenAICallbackHandler
-from langchain import ConversationChain
 from langchain.agents import initialize_agent, Tool, AgentType, load_tools
 from langchain.tools import BaseTool
 from langchain.llms import OpenAI
@@ -108,22 +107,6 @@ empirical_system_prompt_template = (
   Yoy also help me to write parts of my case description of I ask you to do so. 
   
   If the context doesn't provide a satisfactory answer, just tell me that and don't try to make something up.
-  Please try to give detailed answers and write your answers as an academic text, unless explicitly told otherwise.
-  
-  """
-  Context: {context}
-  Question: {question}
-  """
-  If possible, consider sources from both Dutch and English language sources.
-  ''')
-
-empirical_system_prompt_template = (
-  '''You help me to extract relevant information from a case description from news items.
-  The context includes extracts from relevant new items in Dutch and English.
-  You help me by answering questions about the topic I wish to write a case description on.
-  Yoy also help me to write parts of my case description of I ask you to do so. 
-  
-  If the context doesn't provide a satisfactory answer, just tell me that and don't try to make something up.
   
   Please try to give detailed answers and write your answers as an academic text, unless explicitly told otherwise.
   
@@ -144,8 +127,9 @@ empirical_chat_prompt = ChatPromptTemplate.from_messages([empirical_system_messa
 
 # Set up writing chain prompt
 writing_system_prompt_template = (
-  '''You help me write academic texts of a length specified by the user. 
-  For this, you consider the input and chat history and you write a coherent, essay-like text based on this information.
+  '''You help write academic texts of various kinds. 
+  For this, you consider the user input and chat history and you write a text based on this information.
+  The type of text that needs to be written will be specified by the user.
   
   """
   Chat history: {chat_history}
@@ -185,6 +169,7 @@ case_system_prompt_template = (
   For this, you consider the input and chat history and you write a richt, interesting text that embeds elements of what you have learned in the text.
   However, your text should not name concepts or mechanisms explicitly. It should illustrate the concepts or mechanisms without making their presence too obious.
   The case studies should be engaging to read. 
+  It should read like an interesting, real-life story, without making it sound academic.
   
   """
   Chat history: {chat_history}
@@ -262,6 +247,8 @@ oq_system_prompt_template = (
   You make open exam questions based on the chat history and the input provided below.
   
   The user will ask to formulate a question about a certain topic, so make sure the answer is about that topic.
+
+  If the question requires a short introduction, write that introduction as well.
   
   """
   Chat history: {chat_history}
@@ -271,8 +258,8 @@ oq_system_prompt_template = (
   """
   
   The question must not directly refer to 'the context', as the person who will need to answer the question cannot see the context provided to you.
-  The question must be stand-alone.
 
+  Please also provide an answer model for the question.
   ''')
 
 oq_system_prompt = PromptTemplate(template=oq_system_prompt_template,
@@ -311,8 +298,8 @@ async def start():
       Switch(id="Critical_Tool_ON", label="Critical tool", initial=True),
       Switch(id="Case_Tool_ON", label="Case tool", initial=True),
       Switch(id="MC_Tool_ON", label="Multiple Choice tool", initial=True),
-      Switch(id="OQ_Tool_ON", label="Open Questionn tool", initial=True),
-      Switch(id="Agent_Control_ON", label="Agent control", initial=True),
+      Switch(id="OQ_Tool_ON", label="Open Question tool", initial=True),
+      Switch(id="Agent_Control_ON", label="Agent control", initial=False),
       Select(
         id="Agent_Model",
         label="OpenAI - Agent Model",
@@ -330,7 +317,7 @@ async def start():
       Select(
         id="Conceptual_Model",
         label="OpenAI - Conceptual Model",
-        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -344,16 +331,16 @@ async def start():
       Select(
         id="Empirical_Model",
         label="OpenAI - Empirical Model",
-        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
-        id="Num_Docs_Emp",
-        label="Number of empirical documents",
-        initial=20,
-        min=5,
-        max=20,
-        step=1,
+        id="Empirical_Temperature",
+        label="OpenAI - Empirical Temperature",
+        initial=0,
+        min=0,
+        max=2,
+        step=0.1,
       ),
       Slider(
         id="Num_Docs_Con",
@@ -364,17 +351,17 @@ async def start():
         step=1,
       ),
       Slider(
-        id="Empirical_Temperature",
-        label="OpenAI - Empirical Temperature",
-        initial=0,
-        min=0,
-        max=2,
-        step=0.1,
+        id="Num_Docs_Emp",
+        label="Number of empirical documents",
+        initial=20,
+        min=5,
+        max=20,
+        step=1,
       ),
       Select(
         id="Writing_Model",
         label="OpenAI - Writing Model",
-        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -388,7 +375,7 @@ async def start():
       Select(
         id="Critical_Model",
         label="OpenAI - Critical Model",
-        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -402,7 +389,7 @@ async def start():
       Select(
         id="Case_Model",
         label="OpenAI - Case Model",
-        values=["gpt-3.5-turbo-16k", "gtp-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -416,7 +403,7 @@ async def start():
       Select(
         id="MC_Model",
         label="OpenAI - MC Model",
-        values=["gpt-3.5-turbo-16k", "gpt-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -430,7 +417,7 @@ async def start():
       Select(
         id="OQ_Model",
         label="OpenAI - Open Question Model",
-        values=["gpt-3.5-turbo-16k", "gpt-3.5-turbo-instruct", "gpt-4", "gpt-4-32k"],
+        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
         initial_index=0,
       ),
       Slider(
@@ -450,7 +437,7 @@ async def start():
 async def setup_chain(settings):
   # Set number of documents fetched
   k_conceptual = settings["Num_Docs_Con"]
-  k_empirical = settings[|"Num_Docs_Emp"]
+  k_empirical = settings["Num_Docs_Emp"]
   
   # Set conceptual vector store
   chosen_conceptual = settings["Conceptual_Store"]
@@ -804,6 +791,8 @@ async def setup_chain(settings):
 @cl.on_message
 async def main(message: str):
   agent = cl.user_session.get("agent")
-  cb = cl.LangchainCallbackHandler(stream_final_answer=True)
-  res = await cl.make_async(agent.run)(message, callbacks=[cb])
+  cb = cl.LangchainCallbackHandler()
+  res = await cl.make_async(agent.run)(message.content, callbacks=[cb])
   await cl.Message(content=res).send()
+
+
