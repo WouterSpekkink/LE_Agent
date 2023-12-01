@@ -52,6 +52,7 @@ conceptual_dics = FAISS.load_local("./conceptual_vectorstore/Literature_DiCS/", 
 conceptual_sturing = FAISS.load_local("./conceptual_vectorstore/Literature_Sturing/", embeddings)
 conceptual_ng = FAISS.load_local("./conceptual_vectorstore/Literature_Network_Governance/", embeddings)
 conceptual_beleidsdynamiek = FAISS.load_local("./conceptual_vectorstore/Literature_Beleidsdynamiek/", embeddings)
+conceptual_governance_online = FAISS.load_local("./conceptual_vectorstore/Literature_Governance_Online/", embeddings)
 
 # Load empirical FAISS databases
 empirical_ld = FAISS.load_local("./empirical_vectorstore/Empirical_Loss_and_Damage/", embeddings)
@@ -281,7 +282,7 @@ async def start():
       Select(
         id="Conceptual_Store",
         label="Conceptual vector store",
-        values=["All", "DiCS", "Sturing", "Network Governance", "Beleidsdynamiek"],
+        values=["All", "DiCS", "Sturing", "Network Governance", "Beleidsdynamiek", "Governance"],
         initial_index=0,
       ),
       Select(
@@ -303,8 +304,8 @@ async def start():
       Select(
         id="Agent_Model",
         label="OpenAI - Agent Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        values=["gpt-3.5-turbo-16k", "gpt-4-1106-preview"],
+        initial_index=1,
       ),
       Slider(
         id="Agent_Temperature",
@@ -317,8 +318,8 @@ async def start():
       Select(
         id="Conceptual_Model",
         label="OpenAI - Conceptual Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        values=["gpt-3.5-turbo-16k", "gpt-4-1106-preview"],
+        initial_index=1,
       ),
       Slider(
         id="Conceptual_Temperature",
@@ -331,8 +332,8 @@ async def start():
       Select(
         id="Empirical_Model",
         label="OpenAI - Empirical Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        values=["gpt-3.5-turbo-16k", "gpt-4-1106-preview"],
+        initial_index=1,
       ),
       Slider(
         id="Empirical_Temperature",
@@ -361,8 +362,8 @@ async def start():
       Select(
         id="Writing_Model",
         label="OpenAI - Writing Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        values=["gpt-3.5-turbo-16k", "gpt-4-1106-preview"],
+        initial_index=1,
       ),
       Slider(
         id="Writing_Temperature",
@@ -375,8 +376,8 @@ async def start():
       Select(
         id="Critical_Model",
         label="OpenAI - Critical Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        values=["gpt-3.5-turbo-16k", "gpt-4-1106-preview"],
+        initial_index=1,
       ),
       Slider(
         id="Critical_Temperature",
@@ -389,8 +390,8 @@ async def start():
       Select(
         id="Case_Model",
         label="OpenAI - Case Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        values=["gpt-3.5-turbo-16k", "gpt-4-1106-preview"],
+        initial_index=1,
       ),
       Slider(
         id="Case_Temperature",
@@ -403,8 +404,8 @@ async def start():
       Select(
         id="MC_Model",
         label="OpenAI - MC Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        values=["gpt-3.5-turbo-16k", "gpt-4-1106-preview"],
+        initial_index=1,
       ),
       Slider(
         id="MC_Temperature",
@@ -417,8 +418,8 @@ async def start():
       Select(
         id="OQ_Model",
         label="OpenAI - Open Question Model",
-        values=["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
-        initial_index=0,
+        values=["gpt-3.5-turbo-16k", "gpt-4-1106-preview"],
+        initial_index=1,
       ),
       Slider(
         id="OQ_Temperature",
@@ -452,6 +453,8 @@ async def setup_chain(settings):
     conceptual = conceptual_ng
   elif (chosen_conceptual == "Beleidsdynamiek"):
     conceptual = conceptual_beleidsdynamiek
+  elif (chosen_conceptual == "Governance"):
+    conceptual = conceptual_governance_online
 
   # Set up conceptual chain reordering
   redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
