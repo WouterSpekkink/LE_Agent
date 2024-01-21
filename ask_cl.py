@@ -1,16 +1,16 @@
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory, ReadOnlySharedMemory
 from langchain.chains import ConversationalRetrievalChain, ConversationChain
-from langchain.callbacks import OpenAICallbackHandler
+from langchain_community.callbacks import OpenAICallbackHandler
 from langchain.agents import initialize_agent, Tool, AgentType, load_tools
-from langchain.tools import BaseTool
-from langchain.llms import OpenAI
-from langchain.document_transformers import LongContextReorder, EmbeddingsRedundantFilter
+from langchain_community.tools import BaseTool
+from langchain_community.llms import OpenAI
+from langchain_community.document_transformers import LongContextReorder, EmbeddingsRedundantFilter
 from langchain.retrievers.document_compressors import DocumentCompressorPipeline
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain.utilities import GoogleSerperAPIWrapper
+from langchain_community.utilities import GoogleSerperAPIWrapper
 from langchain.prompts import (
     ChatPromptTemplate,
     PromptTemplate,
@@ -62,6 +62,8 @@ empirical_samso = FAISS.load_local("./empirical_vectorstore/Empirical_Samso/", e
 empirical_jsf = FAISS.load_local("./empirical_vectorstore/Empirical_JSF/", embeddings)
 empirical_delta = FAISS.load_local("./empirical_vectorstore/Empirical_Deltaprogramma/", embeddings)
 empirical_rka = FAISS.load_local("./empirical_vectorstore/Empirical_RKA/", embeddings)
+empirical_odisha = FAISS.load_local("./empirical_vectorstore/Empirical_Odisha/", embeddings)
+empirical_chatgpt = FAISS.load_local("./empirical_vectorstore/Empirical_ChatGPT/", embeddings)
 
 # Set up callback handler
 handler = OpenAICallbackHandler()
@@ -289,7 +291,8 @@ async def start():
         id="Empirical_Store",
         label="Empirical vector store",
         values=["Loss and Damage", "Nitrogen", "Inland Shipping",
-                "Samso", "JSF", "Deltaprogramma", "RKA"],
+                "Samso", "JSF", "Deltaprogramma", "RKA", "Odisha",
+                "ChatGPT"],
         initial_index=0,
       ),
       Switch(id="Conceptual_Tool_ON", label="Conceptual tool", initial=True),
@@ -480,6 +483,10 @@ async def setup_chain(settings):
     empirical = empirical_delta
   elif (chosen_empirical == "RKA"):
     empirical = empirical_rka
+  elif (chosen_empirical == "Odisha"):
+    empirical = empirical_odisha
+  elif (chosen_empirical == "ChatGPT"):
+    empirical = empirical_chatgpt
 
   # Setup empirical reorder
   empirical_compression_retriever_reordered = ContextualCompressionRetriever(
